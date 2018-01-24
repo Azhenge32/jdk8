@@ -253,6 +253,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * than 2 and should be at least 8 to mesh with assumptions in
      * tree removal about conversion back to plain bins upon
      * shrinkage.
+     * resize时由链表转换成树的阈值
      */
     static final int TREEIFY_THRESHOLD = 8;
 
@@ -260,6 +261,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * The bin count threshold for untreeifying a (split) bin during a
      * resize operation. Should be less than TREEIFY_THRESHOLD, and at
      * most 6 to mesh with shrinkage detection under removal.
+     * 由树转换成链表的阈值
      */
     static final int UNTREEIFY_THRESHOLD = 6;
 
@@ -268,6 +270,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * (Otherwise the table is resized if too many nodes in a bin.)
      * Should be at least 4 * TREEIFY_THRESHOLD to avoid conflicts
      * between resizing and treeification thresholds.
+     * 当桶中的bin被树化时最小的hash表容量
      */
     static final int MIN_TREEIFY_CAPACITY = 64;
 
@@ -275,6 +278,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * Basic hash bin node, used for most entries.  (See below for
      * TreeNode subclass, and in LinkedHashMap for its Entry subclass.)
      */
+    // 普通链表结点
     static class Node<K,V> implements Map.Entry<K,V> {
         final int hash;
         final K key;
@@ -628,7 +632,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
         Node<K,V>[] tab;
         Node<K,V> p;
         int n, i;
-        if ((tab = table) == null || (n = tab.length) == 0) // 如果链头结点数组为null，或长度为0
+        if ((tab = table) == null || (n = tab.length) == 0) // 如果链头结点数组（即hash表）为null，或长度为0
             n = (tab = resize()).length;                    //      扩容头结点数组
         if ((p = tab[i = (n - 1) & hash]) == null)          // 对key取hash计算在数组中的索引，判断数组位置是否被用了
             tab[i] = newNode(hash, key, value, null);   // 创建新的结点，放在数组汇总
@@ -643,8 +647,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                 for (int binCount = 0; ; ++binCount) {
                     if ((e = p.next) == null) {         // 如果链头结点后没带链表
                         p.next = newNode(hash, key, value, null);   // 把新结点链表尾部
-                        if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
-                            treeifyBin(tab, hash);
+                        if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st    // 如果在添加新结点后，结点所在链表长度大于8，
+                            treeifyBin(tab, hash);  // 把链表变成红黑树
                         break;
                     }
                     if (e.hash == hash &&
@@ -657,7 +661,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                 V oldValue = e.value;
                 if (!onlyIfAbsent || oldValue == null)  // 允许value为null
                     e.value = value;
-                afterNodeAccess(e);
+                afterNodeAccess(e); // 回调函数，主要给LinkedHashMap用
                 return oldValue;
             }
         }
@@ -754,17 +758,18 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     /**
      * Replaces all linked nodes in bin at index for given hash unless
      * table is too small, in which case resizes instead.
+     * 把链表转换成红黑树
      */
     final void treeifyBin(Node<K,V>[] tab, int hash) {
         int n, index; Node<K,V> e;
         if (tab == null || (n = tab.length) < MIN_TREEIFY_CAPACITY)
             resize();
-        else if ((e = tab[index = (n - 1) & hash]) != null) {
-            TreeNode<K,V> hd = null, tl = null;
+        else if ((e = tab[index = (n - 1) & hash]) != null) {  // 遍历链表，转换成树
+            TreeNode<K,V> hd = null, tl = null; //  hd 树根
             do {
-                TreeNode<K,V> p = replacementTreeNode(e, null);
+                TreeNode<K,V> p = replacementTreeNode(e, null);     // 把普通链表结点转换成树结点，并按照链表属性预设树结点顺序
                 if (tl == null)
-                    hd = p;
+                    hd = p;     // 设置树根
                 else {
                     p.prev = tl;
                     tl.next = p;
